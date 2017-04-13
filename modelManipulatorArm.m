@@ -100,10 +100,83 @@ legend(['k_{1} = ',num2str(k1_nom(1))],['k_{1} = ',num2str(k1_nom(2))],['k_{1} =
 hold off
 
 
-%%
-%
-%
-%
+%% Investigate Singular Values - Using K1 = max = 100
+
+% Hinf Norm from the Singular Value Decomposition
+
+% using Skogestad Eq. 3.49, pp. 81
+% Hinf norm is defined as the peak of the maximum singular value of the
+% frequency response.
+
+K_sin = [k1_nom(5), -k1_nom(5), 0, 0;
+    -k1_nom(5), (k1_nom(5)+k2), -k2, 0;
+    0, -k2, (k2+k3), -k3;
+    0, 0, -k3, k3];
+
+A_sin = [zeros(4,4), eye(4);
+    -inv(J)*K_sin, -inv(J)*(D+F)]
+
+B_sin_u2Yq = [zeros(4,4);diag([1/Jm, 0, 0, 0])]; % u to y
+B_sin_w2Yq = [zeros(4,4);diag([1/Jm, 0, 0, 1/Ja3])]; % w to y
+
+
+C_sin_q = [1,0,0,0,0,0,0,0]; % y = qm (blue)
+C_sin_P = [1, zeros(1,7); E]; % y = [qm Pdd]' (red)
+
+% singular values from u to y
+sys_ss_sin_u2Yqq = ss(A_sin,B_sin_u2Yq,C_sin_q,[]); % y = qm (blue) 
+sys_ss_sin_u2YqP = ss(A_sin,B_sin_u2Yq,C_sin_P,[]);
+sys_tf_sin_u2YqP = tf(sys_ss_sin_u2YqP)
+
+figure(2);
+sigmaplot(sys_ss_sin_u2Yqq,{1e-1,1e4},'b')
+title('Singular Values from u to y')
+xlabel('Frequency [rads/s]')
+ylabel('Magnitude [dB]')
+grid on
+
+sys_ss_sin_w2Yqq = ss(A_sin,B_sin_w2Yq,C_sin_q,[]);
+figure(3);
+sigmaplot(sys_ss_sin_w2Yqq,{1e-1,1e4},'b')
+title('Singular Values from w to y')
+xlabel('Frequency [rads/s]')
+ylabel('Magnitude [dB]')
+grid on
+
+% w = logspace(-1,3,1e4);
+% s1 = zeros(length(w),1);
+% s2 = zeros(length(w),1);
+% for i = 1:1:length(w)
+%     out = C_sin_U2Y*inv(1j*w(i)*eye(8)-A_sin)*B_sin_U2Y;
+%     [u,s,v] = svd(out)
+%     s1(i) = s(1,1);
+%     %s2(i) = s(2,2);
+% end
+% % 
+% Hinf_norm = max(s1(:))
+% 
+% % frequency Response of Singular Values
+% 
+% % % % figure(2)
+% % % % loglog(w,s1,'b');%,w,s2,'r')
+% % % title('Frequency Response of Singular Values')
+% % % xlabel('Frequency [rads/s]')
+% % % ylabel('Magnitude')
+% % % grid on
+% % % %legend('\sigma_{1}', '\sigma_{2}')
+% % % 
+% % % figure(3);
+% % % sigmaplot(sys_ss_sin_U2Y,{1e-1,1e4})
+
+
+
+
+
+
+
+
+
+
 
 % % %% Transfer function Matrix
 % % 
