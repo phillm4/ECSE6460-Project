@@ -96,6 +96,7 @@ for i = 1:length(k1_nom)
     
 end
 title('Transfer Function, Motor Torque to Motor Acceleration')
+grid on
 legend(['k_{1} = ',num2str(k1_nom(1))],['k_{1} = ',num2str(k1_nom(2))],['k_{1} = ',num2str(k1_nom(3))],['k_{1} = ',num2str(k1_nom(4))],['k_{1} = ',num2str(k1_nom(5))])
 hold off
 
@@ -108,65 +109,86 @@ hold off
 % Hinf norm is defined as the peak of the maximum singular value of the
 % frequency response.
 
-K_sin = [k1_nom(5), -k1_nom(5), 0, 0;
-    -k1_nom(5), (k1_nom(5)+k2), -k2, 0;
+k1_sig = k1_nom(5);
+K_sin = [k1_sig, -k1_sig, 0, 0;
+    -k1_sig, (k1_sig+k2), -k2, 0;
     0, -k2, (k2+k3), -k3;
     0, 0, -k3, k3];
 
 A_sin = [zeros(4,4), eye(4);
-    -inv(J)*K_sin, -inv(J)*(D+F)]
+    -inv(J)*K_sin, -inv(J)*(D+F)];
 
 B_sin_u2Yq = [zeros(4,4);diag([1/Jm, 0, 0, 0])]; % u to y
 B_sin_w2Yq = [zeros(4,4);diag([1/Jm, 0, 0, 1/Ja3])]; % w to y
 
 
 C_sin_q = [1,0,0,0,0,0,0,0]; % y = qm (blue)
+%E_sig = (1/n) * [zeros(1,4), 0, l1, l2, l3];
 C_sin_P = [1, zeros(1,7); E]; % y = [qm Pdd]' (red)
 
 % singular values from u to y
 sys_ss_sin_u2Yqq = ss(A_sin,B_sin_u2Yq,C_sin_q,[]); % y = qm (blue) 
+
 sys_ss_sin_u2YqP = ss(A_sin,B_sin_u2Yq,C_sin_P,[]);
-sys_tf_sin_u2YqP = tf(sys_ss_sin_u2YqP)
+sys_tf_sin_u2YqP = tf(sys_ss_sin_u2YqP);
+% temp_tf = sys_tf_sin_u2YqP(2,1).*(s^2);
+% sys_tf_sin_u2YqP(2,1) = temp_tf(1,1);
+
 
 figure(2);
-sigmaplot(sys_ss_sin_u2Yqq,{1e-1,1e4},'b')
+sigmaplot(sys_ss_sin_u2Yqq,{1e-1,1e3},'b')
+hold on
+sigmaplot(sys_ss_sin_u2YqP(2,1)*s^2,{1e-1,1e3},'r')
+ylim([-100, 100])
 title('Singular Values from u to y')
 xlabel('Frequency [rads/s]')
 ylabel('Magnitude [dB]')
 grid on
+hold off
 
 sys_ss_sin_w2Yqq = ss(A_sin,B_sin_w2Yq,C_sin_q,[]);
+sys_ss_sin_w2YqP = ss(A_sin,B_sin_w2Yq,C_sin_P,[]);
 figure(3);
-sigmaplot(sys_ss_sin_w2Yqq,{1e-1,1e4},'b')
+sigmaplot(sys_ss_sin_w2Yqq(1,4),{1e-1,1e3},'b')
+% hold on
+% sigmaplot(sys_ss_sin_w2YqP(2,1)*s^2,{1e-1,1e3},'r--')
+% sigmaplot(sys_ss_sin_w2YqP(1,1)*s^2,{1e-1,1e3},'r-.')
 title('Singular Values from w to y')
 xlabel('Frequency [rads/s]')
 ylabel('Magnitude [dB]')
+ylim([-100, 100])
 grid on
 
-% w = logspace(-1,3,1e4);
-% s1 = zeros(length(w),1);
-% s2 = zeros(length(w),1);
-% for i = 1:1:length(w)
-%     out = C_sin_U2Y*inv(1j*w(i)*eye(8)-A_sin)*B_sin_U2Y;
-%     [u,s,v] = svd(out)
-%     s1(i) = s(1,1);
-%     %s2(i) = s(2,2);
-% end
-% % 
-% Hinf_norm = max(s1(:))
-% 
-% % frequency Response of Singular Values
-% 
-% % % % figure(2)
-% % % % loglog(w,s1,'b');%,w,s2,'r')
-% % % title('Frequency Response of Singular Values')
-% % % xlabel('Frequency [rads/s]')
-% % % ylabel('Magnitude')
-% % % grid on
-% % % %legend('\sigma_{1}', '\sigma_{2}')
-% % % 
-% % % figure(3);
-% % % sigmaplot(sys_ss_sin_U2Y,{1e-1,1e4})
+
+% % % % % % sys_ss_sin_u2YqP = ss(A_sin,B_sin_u2Yq,C_sin_P,[]);
+% % % % % 
+% % % % % sys_tf_sin_u2YqP = tf(sys_ss_sin_u2YqP);
+% % % % % temp_tf = sys_tf_sin_u2YqP(2,1).*(s^2);
+% % % % % sys_tf_sin_u2YqP(2,1) = temp_tf(1,1);
+% % % % % [a,b,c,d] = ssdata(sys_tf_sin_u2YqP)
+% % % % % 
+% % % % % w = logspace(-4,4,1e4);
+% % % % % S1 = zeros(length(w),1);
+% % % % % S2 = zeros(length(w),1);
+% % % % % for i = 1:1:length(w)
+% % % % %     out = c*inv(1j*w(i)*eye(8)-a)*b;
+% % % % %     [u,S,v] = svd(out(2,:))
+% % % % %     S1(i) = S(1,1);
+% % % % %     %S2(i) = S(2,2);
+% % % % % end
+% % % % % % 
+% % % % % Hinf_norm = max(S1(:))
+% % % % % 
+% % % % % % frequency Response of Singular Values
+% % % % % 
+% % % % % figure(4)
+% % % % % loglog(w,S1,'r');%,w,s2,'r')
+% % % % % title('Frequency Response of Singular Values')
+% % % % % xlabel('Frequency [rads/s]')
+% % % % % ylabel('Magnitude')
+% % % % % grid on
+% % % % % %legend('\sigma_{1}', '\sigma_{2}')
+
 
 
 
