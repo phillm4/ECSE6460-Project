@@ -2,7 +2,7 @@
 % 
 % ECSE 6460 Multivariable Control - Final Project
 % Kimberly Oakes & Mitchell Phillips
-% Last Edited: April 14, 2017
+% Last Edited: April 17, 2017
 
 clc, clear, close all;
 s = tf('s');
@@ -25,19 +25,18 @@ s = tf('s');
 % k1 is the nonlinear stiffness for the gear box
 %
 
-Jm = 5e-3; Ja1 = 2e-3; Ja2 = 0.02; Ja3 = 0.02; % moment of intertia
+Jm=5e-3; Ja1=2e-3; Ja2=0.02; Ja3=0.02; % moment of intertia, [kg*m^2]
 
-k1_low = 16.7; % k1 min
-k1_high = 100; % k1 max
-k1_avg = (k1_high+k1_low)/2; % k1 average
-k1_nom = linspace(k1_low, k1_high, 5); % create linear set of k1 values
+k1_low = 16.7; % k1 min, [Nm/rad]
+k1_high = 100; % k1 max, [Nm/rad]
+k1_nom = linspace(k1_low, k1_high, 5); % linear set of k1 values
 
-k2 = 110; k3 = 80; % stiffness
-d1 = 0.08; d2 = 0.06; d3 = 0.08; % damping
-fm = 6e-3; fa1 = 1e-3; fa2 = 1e-3;fa3 = 1e-3; % viscous friction
+k2 = 110; k3 = 80; % stiffness, [Nm/rad]
+d1 = 0.08; d2 = 0.06; d3 = 0.08; % damping, [Nm*s/rad]
+fm=6e-3; fa1=1e-3; fa2=1e-3; fa3=1e-3; % viscous friction, [Nm*s/rad]
 n = 220; % gear ratio
-l1 = 20e-3; l2 = 600e-3; l3 = 1530e-3; % link lengths
-Td = 0; %0.5e-3; % time delay
+l1 = 20e-3; l2 = 600e-3; l3 = 1530e-3; % link lengths, [mm]
+Td = 0; %0.5e-3; % time delay, [s]
 
 %% Linearized Model
 
@@ -50,6 +49,7 @@ D = [d1, -d1, 0, 0;
 
 F = diag([fm, fa1, fa2, fa3]);
 
+% in paper, used k1_high for analysis
 K_high = [k1_high, -k1_high, 0, 0;
     -k1_high, (k1_high+k2), -k2, 0;
     0, -k2, (k2+k3), -k3;
@@ -58,6 +58,9 @@ K_high = [k1_high, -k1_high, 0, 0;
 A = [zeros(4,4), eye(4);
     -inv(J)*K_high, -inv(J)*(D+F)];
 
+% only concerned with inputs on first and last mass
+% B = [zeros(4,4);
+%     diag([1/Jm, 0, 0, 1/Ja3])];
 B = [zeros(4,4);
     inv(J)];
 
@@ -70,8 +73,13 @@ C = [1, zeros(1,7);
 % based off the maximum stiffness value for the motor, k1_high
 %
 
-sys_ss = ss(A,B,C,[]); % state space system with k1_high
-sys_tf= tf(sys_ss); % transfer function system with k1_high
+arm_ss = ss(A,B,C,[]); % state space system with k1_high
+arm_ss.StateName = {'motor pos.  (rad)';'joint 1 pos. (rad)';...
+    'joint 2 pos. (rad)';'joint 3 pos. (rad)';...
+    'motor vel.  (rad/s)';'joint 1 vel. (rad/s)';...
+    'joint 2 vel. (rad/s)';'joint 3 vel. (rad/s)'};
+arm_ss.InputName = {'u+wm','null 1','null 2','wp'};  
+arm_ss.OutputName = {'qm';'P'};
 
 %% Transfer function, motor torque to motor acceleration, nominal moderl
 %
@@ -119,6 +127,90 @@ legend(['k_{1} = ',num2str(k1_nom(1))],...
     ['k_{1} = ',num2str(k1_nom(5))])
 hold off
 
+%% Open Loop Analysis
+
+% Poles and Zeros
+
+% Output Poles
+[T, Po] = eig(arm_ss.A);
+Po = diag(Po);
+Yp = arm_ss.C * T;
+fprintf(...
+    'Poles \t\t\t Output pole vectors^T \t Output pole directions^T \n')
+disp([Po Yp' ]);
+
+% Input Pole
+[Q, Pi] = eig(arm_ss.A');
+Pi = diag(Pi);
+
+Up1 = arm_ss.B' * Q;
+Q1 = Q(:, [1:4,7:8,5:6]);
+Up1 = Up1(:, [1:4,7:8,5:6]);
+Pi1 = Pi([1:4,7:8,5:6],:);
+
+Up2 = [arm_ss.b(:,1),arm_ss.B(:,4)]' * Q;
+Q2 = Q(:, [1:4,7:8,5:6]);
+Up2 = Up2(:, [1:4,7:8,5:6]);
+Pi2 = Pi([1:4,7:8,5:6],:);
+
+fprintf([...
+    'Poles \t\t\t\t Input pole vectors^T \t\t\t\t'...
+    'Input pole directions^T \n'])
+disp([Pi1 Up1' ]);
+
+% transmission zeros
+z = tzero(arm_ss({'qm','P'},{'u+wm','wp'}));
+fprintf('System zeros: \n')
+disp(z)
+
+z_qm = tzero(arm_ss({'qm'},{'u+wm'}));
+fprintf('Transmission zeros for Motor Position Output, u and wm Input: \n')
+disp(z_qm)
+
+%% Frequency Response 
+
+figure(2)
+bodemag(arm_ss({'qm','P'},{'u+wm','wp'}),'b',...
+    arm_ss({'qm'},{'u+wm','wp'}),'r');
+legend('Tool Position (P)','Motor Position (qm)','location','SouthWest')
+title('Open Loop Response')
+
+%% Mode Response
+
+[V,D] = eig(arm_ss.A,'nobalance');
+p = diag(D);
+[p,ndx] = esort(p);
+V = V(:,ndx);
+systemp = arm_ss({'qm','P'},{'u+wm'});
+figure(3)
+for ii = 1:length(D)
+    b = real(V(:,ii))/norm(real(V(:,ii)));
+    set(systemp,'b',b,'d',[]);
+    subplot(2,4,ii);
+    impulse(systemp);
+    title(['Mode ',num2str(D(ii,ii))])
+end
+
+%% Controller 1 - qm
+
+w1 = 1;
+w2 = 100*tf(conv([1 10],[0.5227 3.266 1406]),conv([1 0],[1 5.808 2324]));
+
+[kinf1a,cl,gam1,info]=ncfsyn(arm_ss({'qm'},{'u+wm'}),w1,w2)
+figure(4)
+bodemag(kinf1a,{1e-1,1e3},'r')
+grid on
+
+
+% Controller 2 - qm and P
+
+hold on
+w1 = 50;
+w2 = [tf([1 3],[1 0]) 0;0 tf(0.2,conv([1 5],[1 5]))];
+[kinf2,cl2,gam2,info2] = ncfsyn(arm_ss({'qm','P'},{'wp'}),w1,w2);
+bodemag(kinf1a+kinf2(1,1),{1e-1,1e3},'b')  
+
+
 %% Singular Value Plots
 %
 % Replication of Fig. 4 in, "Singular Joint Control of a Flexible
@@ -130,8 +222,6 @@ hold off
 
 % recreate System, some parameters based off previous values
 % 'sig' subscript used to represent 'singular value'
-
-K_sig = K_high;
 
 A_sig = A;
 
@@ -145,11 +235,11 @@ sys_ss_sig = ss(A_sig,B_sig,C_sig,[]);
 sys_tf_sig = tf(sys_ss_sig);
 
 % plot of the singular values, u to y
-figure(2)
-sigmaplot(sys_tf_sig(1,1),{1e-4,1e6},'b')
+figure(20)
+sigmaplot(sys_tf_sig(1,1),{1e-1,1e3},'b')
 hold on
-sigmaplot([(sys_tf_sig(1,1)) ; (sys_tf_sig(2,1)*s^2)],{1e-4,1e6},'r')
-%ylim([-100, 100])
+sigmaplot([(sys_tf_sig(1,1)) ; (sys_tf_sig(2,1)*s^2)],{1e-1,1e3},'r')
+ylim([-100, 100])
 title('Singular Values from u to y')
 xlabel('Frequency [rads/s]')
 ylabel('Magnitude [dB]')
@@ -158,7 +248,7 @@ grid on
 hold off
 
 % plot of singular values, w to y
-figure(3)
+figure(30)
 sigmaplot([sys_tf_sig(1,1), sys_tf_sig(1,4)],{1e-1,1e3},'b')
 hold on
 sigmaplot([sys_tf_sig(1,1), sys_tf_sig(1,4) ;...
@@ -194,7 +284,7 @@ end
 
 % frequency Response of Singular Values
 
-figure(4)
+figure(40)
 loglog(w,Sig_A1,'b',w,Sig_A2,'r')
 title('Singular Values from u to y, manual SVD')
 xlabel('Frequency [rads/s]')
@@ -225,7 +315,7 @@ end
 
 % frequency Response of Singular Values
 
-figure(5)
+figure(50)
 loglog(w,Sig_B1,'b'); % ,w,Sig_B2,'r')
 title('Singular Values from w to y, manual SVD')
 xlabel('Frequency [rads/s]')
@@ -234,6 +324,20 @@ ylim([0.0001, 1000])
 legend('y = q_m'); % ,'y = [q_m Pdd]''')
 grid on
 hold off
+
+%% Controller 1
+
+Csub = [1 zeros(1,7);l1/n*A(6,:)+l2/n*A(7,:)+l3/n*A(8,:)];
+Dsub = [zeros(1,4);l1/n*B(6,:)+l2/n*B(7,:)+l3/n*B(8,:)];
+Dsub = [Dsub(:,1),Dsub(:,4)];
+Bsub = [B(:,1),B(:,4)];
+%syssub = ss(A,Bsub,Csub,Dsub);
+syssub = arm_ss
+w1 = 1;
+w2 = 100*tf(conv([1 10],[0.5227 3.266 1406]),conv([1 0],[1 5.808 2324]));
+syssub1 = ss(A,Bsub,C(1,:),Dsub(1,:));
+
+[kinf1a,cl,gam,info]=ncfsyn(arm_ss(1,1),w1,w2)
 
 %% References
 %
