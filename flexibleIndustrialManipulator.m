@@ -2,7 +2,7 @@
 % 
 % ECSE 6460 Multivariable Control - Final Project
 % Kimberly Oakes & Mitchell Phillips
-% Last Edited: April 17, 2017
+% Last Edited: April 25, 2017
 
 clc, clear, close all;
 s = tf('s');
@@ -16,7 +16,7 @@ s = tf('s');
 %
 % Outputs of the system:
 %                       qm - motor position
-%                       Pa - tool acceleration
+%                       Pa - tool acceleration (Pdd)
 %
 
 %% Nominal Parameter Values
@@ -132,9 +132,9 @@ hold off
 % Poles and Zeros
 
 % Output Poles
-[T, Po] = eig(arm_ss.A);
+[T_SISO, Po] = eig(arm_ss.A);
 Po = diag(Po);
-Yp = arm_ss.C * T;
+Yp = arm_ss.C * T_SISO;
 fprintf(...
     'Poles \t\t\t Output pole vectors^T \t Output pole directions^T \n')
 disp([Po Yp' ]);
@@ -169,10 +169,13 @@ disp(z_qm)
 
 %% Frequency Response 
 
+G_SISO = arm_ss({'qm'},{'u+wm'}); % SISO Plant
+
+G_MIMO = [arm_ss({'qm'},{'u+wm'});...
+     arm_ss({'P'},{'u+wm'})*s^2]; % MIMO Plant
+
 figure(2)
-bodemag(arm_ss({'qm','P'},{'u+wm','wp'}),'b',...
-    arm_ss({'qm'},{'u+wm','wp'}),'r');
-legend('Tool Position (P)','Motor Position (qm)','location','SouthWest')
+bodemag(G_MIMO,'b');
 title('Open Loop Response')
 
 %% Mode Response
@@ -191,27 +194,138 @@ for ii = 1:length(D)
     title(['Mode ',num2str(D(ii,ii))])
 end
 
-%% Controller 1 - qm
+%% Loop Shaping
 
-w1 = 1;
-w2 = 100*tf(conv([1 10],[0.5227 3.266 1406]),conv([1 0],[1 5.808 2324]));
+% SISO
+S_SISO=1/(1+G_SISO); % SISO Sensitivity
+T_SISO=1-G_SISO; % SISO Complementary 
 
-[kinf1a,cl,gam1,info]=ncfsyn(arm_ss({'qm'},{'u+wm'}),w1,w2)
+% Gain and Phase Margins for SISO
+Marg_SISO = allmargin(G_SISO)
+
+% Controller 1 Weights - qm
+w1_1 = 1;
+w2_1 = 100*tf(conv([1 10],[0.5227 3.266 1406]),conv([1 0],[1 5.808 2324]));
+
+% plot for loop shaping of controller 1
 figure(4)
-bodemag(kinf1a,{1e-1,1e3},'r')
-grid on
-
-
-% Controller 2 - qm and P
-
+bodemag(S_SISO, {1e-1,1e3})
 hold on
-w1 = 50;
-w2 = [tf([1 3],[1 0]) 0;0 tf(0.2,conv([1 5],[1 5]))];
-[kinf2,cl2,gam2,info2] = ncfsyn(arm_ss({'qm','P'},{'wp'}),w1,w2);
-bodemag(kinf1a+kinf2(1,1),{1e-1,1e3},'b')  
+bodemag(1/w2_1, {1e-1,1e3})
+title('Sensitivity and Performance Weight - Controller 1')
+legend('Sensitivity', 'Weighting Function')
+hold off
 
+% MIMO
+S_MIMO=1/(1+G_MIMO(1,1)); % MIMO Sensitivity
+T_MIMO=1-G_MIMO(1,1); % MIMO Complementary 
+
+% Gain and Phase Margins for MIMO
+Marg_MIMO = allmargin(G_MIMO(1,1)) %should match up with Marg_SISO
+
+% controller 2 weights - qm, Pdd
+w1_2 = 50;
+w2_2 = [tf([1 3],[1 0]) 0;0 tf(0.2,conv([1 5],[1 5]))];
+
+% plot for loop shaping of controller 2
+figure(5)
+bodemag(S_MIMO, {1e-1,1e3})
+hold on
+bodemag((1/(w2_1(1,1)*w2_2(1,1))), {1e-1,1e3})
+title('Sensitivity and Performance Weight - Controller 2')
+legend('Sensitivity', 'Weighting Function')
+hold off
+
+% Controller Gain - do for both controllers
+[kinf1,cl1,gam1,info1]=ncfsyn(arm_ss({'qm'},{'u+wm'}),w1_1,w2_1); % ctrl 1
+[kinf2,cl2,gam2,info2] = ncfsyn(G_MIMO,w1_2,w2_2); % ctrl 2
+
+% plot of controller gains
+figure(6)
+bodemag(kinf1,{1e-1,1e3},'r')
+hold on
+bodemag(kinf2(1,1),{1e-1,1e3},'b')
+grid on
+title('Controller Gains')
+legend({'$H_{\infty} (q_{m})$','H_{\infty}(q_{m}, \ddot{P})'},...
+    'Interpreter','latex')
+hold off
+
+% Loop Gains for both Controllers
+L1 = kinf1*G_SISO;
+L2 = kinf2(1)*G_MIMO(1);
+
+figure(7)
+bodemag(L1,{1e-1,1e3},'r')
+hold on
+bodemag(L2,{1e-1,1e3},'b')
+grid on
+title('Loop Gains')
+legend({'$H_{\infty} (q_{m})$','H_{infty}(q_{m}, ddot{P})'},...
+    'Interpreter','latex')
+hold off
+
+
+%% Loop Shaping Results
+
+S1 = 1/(1+L1);
+S2 = 1/(1+L2);
+
+figure(8)
+bodemag(S1,{1e-1,1e3},'r')
+hold on
+bodemag(1/w2_1, {1e-1,1e3},'r--')
+bodemag(S2,{1e-1,1e3},'b')
+bodemag((1/(w2_1(1,1)*w2_2(1,1))), {1e-1,1e3},'b--')
+bodemag(S_SISO, {1e-1,1e3},'k.')
+grid on
+title('Controller Sensitivity')
+legend({'$S (q_{m})$','$w (q_{m})$',...
+    'S (q_{m}, ddot{P})','w (q_{m}, ddot{P})','S'},...
+    'Interpreter','latex','Location','southeast')
+hold off
+
+%% Closed loop Analysis
+% 
+% sys = (kinf1*G_SISO)/(1-(kinf1*G_SISO)); % closed loop wrt ref 
+% Use positive feedback for Hinf controller
+%
+
+disp('Closed Loop Poles using Controller 1')
+pole(cl1)
+disp('Closed Loop Zeros using Controller 1')
+zero(cl1(1,1))
+figure(9);
+pzmap(cl1)
+title('Pole/Zero Map Controller 1')
+
+disp('Closed Loop Poles using Controller 2')
+pole(cl2)
+disp('Closed Loop Zeros using Controller 2')
+zero(cl2(1,1))
+figure(10);
+pzmap(cl2)
+title('Pole/Zero Map Controller 2')
+
+figure(11);
+step(cl1(1,1))
+hold on
+step(cl2(1,1))
+title('Step Response for Output q_m and Input (u+w)')
+legend('Controller 1', 'Controller 2')
+hold off
+
+figure(12);
+step(cl1(2,1))
+hold on
+step(cl2(2,1))
+title('Step Response for Output P_{dd} and Input (u+w)')
+legend('Controller 1', 'Controller 2')
+hold off
 
 %% Singular Value Plots
+%
+% Does not use arm_ss model
 %
 % Replication of Fig. 4 in, "Singular Joint Control of a Flexible
 % Industrial Manipulator using H_inf Loop Shaping
@@ -235,7 +349,7 @@ sys_ss_sig = ss(A_sig,B_sig,C_sig,[]);
 sys_tf_sig = tf(sys_ss_sig);
 
 % plot of the singular values, u to y
-figure(20)
+figure(13)
 sigmaplot(sys_tf_sig(1,1),{1e-1,1e3},'b')
 hold on
 sigmaplot([(sys_tf_sig(1,1)) ; (sys_tf_sig(2,1)*s^2)],{1e-1,1e3},'r')
@@ -248,7 +362,7 @@ grid on
 hold off
 
 % plot of singular values, w to y
-figure(30)
+figure(14)
 sigmaplot([sys_tf_sig(1,1), sys_tf_sig(1,4)],{1e-1,1e3},'b')
 hold on
 sigmaplot([sys_tf_sig(1,1), sys_tf_sig(1,4) ;...
@@ -260,84 +374,6 @@ ylabel('Magnitude [dB]')
 legend('y = q_m','y = [q_m Pdd]''')
 grid on
 hold off
-
-%% recreating the singular value plots from above manually with svd
-
-% recreating plot of the singular values, u to y
-
-sig_A1 = (sys_tf_sig(1,1));
-[a_sysA1, b_sysA1, c_sysA1, d_sysA1] = ssdata(ss(sig_A1(1))); 
-sig_A2 = ([(sys_tf_sig(1,1)) ; (sys_tf_sig(2,1)*s^2)]);
-[a_sysA2, b_sysA2, c_sysA2, d_sysA2] = ssdata(ss(sig_A2)); 
-
-w = logspace(-1,3,1e4);
-Sig_A1 = zeros(length(w),1);
-Sig_A2 = zeros(length(w),1);
-for i = 1:1:length(w)
-    out1 = c_sysA1*inv(1j*w(i)*eye(8)-a_sysA1)*b_sysA1;
-    [u1,S1,v1] = svd(out1);
-    out2 = c_sysA2*inv(1j*w(i)*eye(8)-a_sysA2)*b_sysA2;
-    [u2,S2,v2] = svd(out2);
-    Sig_A1(i) = S1(1,1);
-    Sig_A2(i) = S2(1,1);
-end
-
-% frequency Response of Singular Values
-
-figure(40)
-loglog(w,Sig_A1,'b',w,Sig_A2,'r')
-title('Singular Values from u to y, manual SVD')
-xlabel('Frequency [rads/s]')
-ylabel('Magnitude')
-ylim([0.0001, 1000])
-legend('y = q_m','y = [q_m Pdd]''')
-grid on
-
-% recreating plot of the singular values, w to y
-
-sig_B1 = ([sys_tf_sig(1,1), sys_tf_sig(1,4)]);
-[a_sysB1, b_sysB1, c_sysB1, d_sysB1] = ssdata(ss(sig_B1)); 
-% sig_B2 = ([sys_tf_sig(1,1), sys_tf_sig(1,4) ;...
-%     sys_tf_sig(2,1)*s^2,sys_tf_sig(2,4)*s^2]);
-% [a_sysB2i, b_sysB2i, c_sysB2i, d_sysB2i] = ssdata(ss(sig_B2(2,2))); 
-
-w = logspace(-1,3,1e4);
-Sig_B1 = zeros(length(w),1);
-Sig_B2 = zeros(length(w),1);
-for i = 1:1:length(w)
-    out1 = c_sysB1*inv(1j*w(i)*eye(8)-a_sysB1)*b_sysB1;
-    [u1,S1,v1] = svd(out1);
-%     out2 = c_sysB2i*inv(1j*w(i)*eye(8)-a_sysB2i)*b_sysB2i;
-%     [u2,S2,v2] = svd(out2);
-    Sig_B1(i) = S1(1,1);
-%     Sig_B2(i) = S2(1,1);
-end
-
-% frequency Response of Singular Values
-
-figure(50)
-loglog(w,Sig_B1,'b'); % ,w,Sig_B2,'r')
-title('Singular Values from w to y, manual SVD')
-xlabel('Frequency [rads/s]')
-ylabel('Magnitude')
-ylim([0.0001, 1000])
-legend('y = q_m'); % ,'y = [q_m Pdd]''')
-grid on
-hold off
-
-%% Controller 1
-
-Csub = [1 zeros(1,7);l1/n*A(6,:)+l2/n*A(7,:)+l3/n*A(8,:)];
-Dsub = [zeros(1,4);l1/n*B(6,:)+l2/n*B(7,:)+l3/n*B(8,:)];
-Dsub = [Dsub(:,1),Dsub(:,4)];
-Bsub = [B(:,1),B(:,4)];
-%syssub = ss(A,Bsub,Csub,Dsub);
-syssub = arm_ss
-w1 = 1;
-w2 = 100*tf(conv([1 10],[0.5227 3.266 1406]),conv([1 0],[1 5.808 2324]));
-syssub1 = ss(A,Bsub,C(1,:),Dsub(1,:));
-
-[kinf1a,cl,gam,info]=ncfsyn(arm_ss(1,1),w1,w2)
 
 %% References
 %
