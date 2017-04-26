@@ -261,7 +261,7 @@ hold on
 bodemag(L2,{1e-1,1e3},'b')
 grid on
 title('Loop Gains')
-legend({'$H_{\infty} (q_{m})$','H_{infty}(q_{m}, ddot{P})'},...
+legend({'$\H_{\infty} (q_{m})$','H_{infty}(q_{m}, ddot{P})'},...
     'Interpreter','latex')
 hold off
 
@@ -355,8 +355,8 @@ hold on
 sigmaplot([(sys_tf_sig(1,1)) ; (sys_tf_sig(2,1)*s^2)],{1e-1,1e3},'r')
 ylim([-100, 100])
 title('Singular Values from u to y')
-xlabel('Frequency [rads/s]')
-ylabel('Magnitude [dB]')
+% xlabel('Frequency [rads/s]')
+% ylabel('Magnitude [dB]')
 legend('y = q_m','y = [q_m Pdd]''')
 grid on
 hold off
@@ -369,8 +369,8 @@ sigmaplot([sys_tf_sig(1,1), sys_tf_sig(1,4) ;...
     sys_tf_sig(2,1)*s^2,sys_tf_sig(2,4)*s^2],{1e-1,1e3},'r')
 ylim([-100, 100])
 title('Singular Values from w to y')
-xlabel('Frequency [rads/s]')
-ylabel('Magnitude [dB]')
+% xlabel('Frequency s]')
+% ylabel('Magnitude [dB]')
 legend('y = q_m','y = [q_m Pdd]''')
 grid on
 hold off
