@@ -2,10 +2,11 @@
 % 
 % ECSE 6460 Multivariable Control - Final Project
 % Kimberly Oakes & Mitchell Phillips
-% Last Edited: April 25, 2017
+% Last Edited: May 2, 2017
 
 clc, clear, close all;
 s = tf('s');
+
 
 %% Model Notes
 %
@@ -19,11 +20,12 @@ s = tf('s');
 %                       Pa - tool acceleration (Pdd)
 %
 
+
 %% Nominal Parameter Values
 %
 % Note for linearized model, k1 = constant and Td = 0
-% k1 is the nonlinear stiffness for the gear box
-%
+% k1 is the nonlinear stiffness for the gear box.
+% Values provided by journal article
 
 Jm=5e-3; Ja1=2e-3; Ja2=0.02; Ja3=0.02; % moment of intertia, [kg*m^2]
 
@@ -37,6 +39,7 @@ fm=6e-3; fa1=1e-3; fa2=1e-3; fa3=1e-3; % viscous friction, [Nm*s/rad]
 n = 220; % gear ratio
 l1 = 20e-3; l2 = 600e-3; l3 = 1530e-3; % link lengths, [mm]
 Td = 0; %0.5e-3; % time delay, [s]
+
 
 %% Linearized Model
 
@@ -68,6 +71,7 @@ E = (1/n) * [0, l1, l2, l3, zeros(1,4)];
 C = [1, zeros(1,7);
     E];
 
+
 %% State Space and Transfer Function Systems
 %
 % based off the maximum stiffness value for the motor, k1_high
@@ -80,6 +84,7 @@ arm_ss.StateName = {'motor pos.  (rad)';'joint 1 pos. (rad)';...
     'joint 2 vel. (rad/s)';'joint 3 vel. (rad/s)'};
 arm_ss.InputName = {'u+wm','null 1','null 2','wp'};  
 arm_ss.OutputName = {'qm';'P'};
+
 
 %% Transfer function, motor torque to motor acceleration, nominal moderl
 %
@@ -127,6 +132,7 @@ legend(['k_{1} = ',num2str(k1_nom(1))],...
     ['k_{1} = ',num2str(k1_nom(5))])
 hold off
 
+
 %% Open Loop Analysis
 
 % Poles and Zeros
@@ -143,6 +149,7 @@ disp([Po Yp' ]);
 [Q, Pi] = eig(arm_ss.A');
 Pi = diag(Pi);
 
+% pole directions
 Up1 = arm_ss.B' * Q;
 Q1 = Q(:, [1:4,7:8,5:6]);
 Up1 = Up1(:, [1:4,7:8,5:6]);
@@ -167,16 +174,60 @@ z_qm = tzero(arm_ss({'qm'},{'u+wm'}));
 fprintf('Transmission zeros for Motor Position Output, u and wm Input: \n')
 disp(z_qm)
 
+% zero directions - equation provided by Zhou
+fprintf('[x u]_transpose zero directions \n')
+xu_1 = null([arm_ss({'qm','P'},{'u+wm','wp'}).A - z(1)*eye(8),...
+    arm_ss({'qm','P'},{'u+wm','wp'}).B;...
+    arm_ss({'qm','P'},{'u+wm','wp'}).C,...
+    arm_ss({'qm','P'},{'u+wm','wp'}).D])
+xu_2 = null([arm_ss({'qm','P'},{'u+wm','wp'}).A - z(2)*eye(8),...
+    arm_ss({'qm','P'},{'u+wm','wp'}).B;...
+    arm_ss({'qm','P'},{'u+wm','wp'}).C,...
+    arm_ss({'qm','P'},{'u+wm','wp'}).D])
+xu_3 = null([arm_ss({'qm','P'},{'u+wm','wp'}).A - z(3)*eye(8),...
+    arm_ss({'qm','P'},{'u+wm','wp'}).B;...
+    arm_ss({'qm','P'},{'u+wm','wp'}).C,...
+    arm_ss({'qm','P'},{'u+wm','wp'}).D])
+xu_4 = null([arm_ss({'qm','P'},{'u+wm','wp'}).A - z(4)*eye(8),...
+    arm_ss({'qm','P'},{'u+wm','wp'}).B;...
+    arm_ss({'qm','P'},{'u+wm','wp'}).C,...
+    arm_ss({'qm','P'},{'u+wm','wp'}).D])
+
+% [y v]'
+fprintf('[y v]_transpose zero directions \n')
+yv_1 = null([arm_ss({'qm','P'},{'u+wm','wp'}).A - z(1)*eye(8),...
+    arm_ss({'qm','P'},{'u+wm','wp'}).B;...
+    arm_ss({'qm','P'},{'u+wm','wp'}).C,...
+    arm_ss({'qm','P'},{'u+wm','wp'}).D]')
+yv_2 = null([arm_ss({'qm','P'},{'u+wm','wp'}).A - z(2)*eye(8),...
+    arm_ss({'qm','P'},{'u+wm','wp'}).B;...
+    arm_ss({'qm','P'},{'u+wm','wp'}).C,...
+    arm_ss({'qm','P'},{'u+wm','wp'}).D]')
+yv_3 = null([arm_ss({'qm','P'},{'u+wm','wp'}).A - z(3)*eye(8),...
+    arm_ss({'qm','P'},{'u+wm','wp'}).B;...
+    arm_ss({'qm','P'},{'u+wm','wp'}).C,...
+    arm_ss({'qm','P'},{'u+wm','wp'}).D]')
+yv_4 = null([arm_ss({'qm','P'},{'u+wm','wp'}).A - z(4)*eye(8),...
+    arm_ss({'qm','P'},{'u+wm','wp'}).B;...
+    arm_ss({'qm','P'},{'u+wm','wp'}).C,...
+    arm_ss({'qm','P'},{'u+wm','wp'}).D]')
+
+
 %% Frequency Response 
 
+% input: torque + motor distr.
+% output: motor position
 G_SISO = arm_ss({'qm'},{'u+wm'}); % SISO Plant
 
-G_MIMO = [arm_ss({'qm'},{'u+wm'});...
-     arm_ss({'P'},{'u+wm'})*s^2]; % MIMO Plant
+% input: 1.) torque + motor distr. // 2.) tool distr.
+% output: 2.) motor position // 2.) tool acceleration
+G_MIMO = [tf(arm_ss({'qm'},{'u+wm'}));...
+     tf(arm_ss({'P'},{'u+wm'}))*s^2]; % MIMO Plant
 
 figure(2)
 bodemag(G_MIMO,'b');
 title('Open Loop Response')
+
 
 %% Mode Response
 
@@ -193,6 +244,25 @@ for ii = 1:length(D)
     impulse(systemp);
     title(['Mode ',num2str(D(ii,ii))])
 end
+
+
+%% RGA Calculation
+%
+% RGA does not tell us much information about the system since we are
+% really only controlling the motor torque with the other inputs being
+% disturbances.
+% 
+
+% want to look at full system with outputs of interest
+arm_ss_accel = (arm_ss);
+arm_ss_accel(2,:) = arm_ss_accel(2,:) * s^2;
+G = [tf(arm_ss_accel(1,1)), tf(arm_ss_accel(1,2)),...
+    tf(arm_ss_accel(1,3)), tf(arm_ss_accel(1,4));...
+    tf(arm_ss_accel(2,1)), tf(arm_ss_accel(2,2)),...
+    tf(arm_ss_accel(2,3)), tf(arm_ss_accel(2,4))];
+Gss = evalfr(G,0);
+RGAss = Gss.*pinv(Gss).'
+
 
 %% Loop Shaping
 
@@ -236,8 +306,11 @@ title('Sensitivity and Performance Weight - Controller 2')
 legend('Sensitivity', 'Weighting Function')
 hold off
 
+
+%% Controller Analysis
+
 % Controller Gain - do for both controllers
-[kinf1,cl1,gam1,info1]=ncfsyn(arm_ss({'qm'},{'u+wm'}),w1_1,w2_1); % ctrl 1
+[kinf1,cl1,gam1,info1] = ncfsyn(arm_ss({'qm'},{'u+wm'}),w1_1,w2_1); % ctrl1
 [kinf2,cl2,gam2,info2] = ncfsyn(G_MIMO,w1_2,w2_2); % ctrl 2
 
 % plot of controller gains
@@ -247,7 +320,7 @@ hold on
 bodemag(kinf2(1,1),{1e-1,1e3},'b')
 grid on
 title('Controller Gains')
-legend({'$H_{\infty} (q_{m})$','H_{\infty}(q_{m}, \ddot{P})'},...
+legend({'$H_{\infty} (q_{m})$','$H_{\infty}(q_{m}, \ddot{P})$'},...
     'Interpreter','latex')
 hold off
 
@@ -261,12 +334,12 @@ hold on
 bodemag(L2,{1e-1,1e3},'b')
 grid on
 title('Loop Gains')
-legend({'$\H_{\infty} (q_{m})$','H_{infty}(q_{m}, ddot{P})'},...
+legend({'$H_{\infty} (q_{m})$','$H_{\infty}(q_{m}, \ddot{P})$'},...
     'Interpreter','latex')
 hold off
 
 
-%% Loop Shaping Results
+%% Loop Shaping Results // Sensitivity Analysis
 
 S1 = 1/(1+L1);
 S2 = 1/(1+L2);
@@ -281,9 +354,10 @@ bodemag(S_SISO, {1e-1,1e3},'k.')
 grid on
 title('Controller Sensitivity')
 legend({'$S (q_{m})$','$w (q_{m})$',...
-    'S (q_{m}, ddot{P})','w (q_{m}, ddot{P})','S'},...
+    '$S (q_{m}, \ddot{P})$','$w (q_{m}, \ddot{P})$','$S$'},...
     'Interpreter','latex','Location','southeast')
 hold off
+
 
 %% Closed loop Analysis
 % 
@@ -291,37 +365,44 @@ hold off
 % Use positive feedback for Hinf controller
 %
 
+% Closed Loop Analysis - Controller 1
+
 disp('Closed Loop Poles using Controller 1')
-pole(cl1)
+pole(cl1) % poles
+
+
 disp('Closed Loop Zeros using Controller 1')
-zero(cl1(1,1))
+zero(cl1(1,1)) % zeros
+
 figure(9);
 pzmap(cl1)
 title('Pole/Zero Map Controller 1')
 
+zcl1 = tzero(cl1); % transmission zeros
+fprintf('Transmission zeros Ctrl 1: \n')
+disp(zcl1)
+
+% Closed Loop Analysis - Controller 2
+
 disp('Closed Loop Poles using Controller 2')
-pole(cl2)
+pole(cl2) % poles
+
 disp('Closed Loop Zeros using Controller 2')
-zero(cl2(1,1))
+zero(cl2(1,1)) % zeros
+
 figure(10);
 pzmap(cl2)
 title('Pole/Zero Map Controller 2')
 
-figure(11);
-step(cl1(1,1))
-hold on
-step(cl2(1,1))
-title('Step Response for Output q_m and Input (u+w)')
-legend('Controller 1', 'Controller 2')
-hold off
+zcl2 = tzero(cl2); % transmission zeros
+fprintf('Transmission zeros Ctrl 2: \n')
+disp(zcl2)
 
-figure(12);
-step(cl1(2,1))
-hold on
-step(cl2(2,1))
-title('Step Response for Output P_{dd} and Input (u+w)')
-legend('Controller 1', 'Controller 2')
-hold off
+
+%% Simululations performed in Simulink
+%
+% See corresponding script and simulink files.
+%
 
 %% Singular Value Plots
 %
@@ -355,9 +436,7 @@ hold on
 sigmaplot([(sys_tf_sig(1,1)) ; (sys_tf_sig(2,1)*s^2)],{1e-1,1e3},'r')
 ylim([-100, 100])
 title('Singular Values from u to y')
-% xlabel('Frequency [rads/s]')
-% ylabel('Magnitude [dB]')
-legend('y = q_m','y = [q_m Pdd]''')
+legend({'y = q_m','y = [q_m $\ddot{P}$]'''},'Interpreter','latex')
 grid on
 hold off
 
@@ -369,11 +448,10 @@ sigmaplot([sys_tf_sig(1,1), sys_tf_sig(1,4) ;...
     sys_tf_sig(2,1)*s^2,sys_tf_sig(2,4)*s^2],{1e-1,1e3},'r')
 ylim([-100, 100])
 title('Singular Values from w to y')
-% xlabel('Frequency s]')
-% ylabel('Magnitude [dB]')
-legend('y = q_m','y = [q_m Pdd]''')
+legend({'y = q_m','y = [q_m $\ddot{P}$]'''},'Interpreter','latex')
 grid on
 hold off
+
 
 %% References
 %
