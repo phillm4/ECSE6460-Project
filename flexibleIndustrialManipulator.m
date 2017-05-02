@@ -399,7 +399,7 @@ fprintf('Transmission zeros Ctrl 2: \n')
 disp(zcl2)
 
 
-%% Simululations performed in Simulink
+%% Simulations performed in Simulink
 %
 % See corresponding script and simulink files.
 %
